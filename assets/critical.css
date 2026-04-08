@@ -97,7 +97,8 @@ body {
     calc(100% - var(--page-margin) * 2)
   );
   --content-margin: minmax(var(--page-margin), 1fr);
-  --content-grid: var(--content-margin) var(--content-width) var(--content-margin);
+  --content-grid: var(--content-margin) var(--content-width)
+    var(--content-margin);
 
   /* This is required to make <img> elements work as background images */
   position: relative;
@@ -114,4 +115,54 @@ body {
 /* Child elements that use the full-width utility class span the entire viewport. */
 .shopify-section > .full-width {
   grid-column: 1 / -1;
+}
+
+.product-section {
+  display: grid;
+  gap: 2rem;
+  padding-block: 2rem;
+}
+
+.product-section__media,
+.product-section__details {
+  min-width: 0;
+}
+
+.product-images,
+.product-section__details,
+.product-form form {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.product-image {
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.product-info {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.product-form select,
+.product-form input[type="text"],
+.product-form input[type="submit"],
+.product-form .shopify-payment-button {
+  width: 100%;
+}
+
+.product-form input[type="text"],
+.product-form select,
+.product-form input[type="submit"] {
+  min-height: 2.75rem;
+  padding: 0.75rem 1rem;
+}
+
+@media (min-width: 750px) {
+  .product-section {
+    align-items: start;
+    column-gap: 2rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
 }
