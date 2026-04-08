@@ -159,6 +159,32 @@ body {
   padding: 0.75rem 1rem;
 }
 
+.product-form .shopify-payment-button__button,
+.product-form .shopify-payment-button__more-options {
+  width: 100%;
+}
+
+@media (max-width: 749px) {
+  .product-section {
+    gap: 1.5rem;
+    padding-block: 1.5rem;
+  }
+
+  .product-images,
+  .product-section__details,
+  .product-form form {
+    gap: 1rem;
+  }
+
+  .product-info {
+    gap: 0.5rem;
+  }
+
+  .product-form {
+    max-width: 100%;
+  }
+}
+
 @media (min-width: 750px) {
   .product-section {
     align-items: start;
