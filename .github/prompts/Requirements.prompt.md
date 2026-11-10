@@ -4,6 +4,7 @@ description: Capture and confirm what we are building (problem, scope, acceptanc
 argument-hint: taskId=TASK-330-Superuser goal="..." context="..."
 agent: agent
 ---
+<!-- project-workflow:generated -->
 
 Use this prompt to produce a crisp, testable set of requirements.
 
@@ -12,9 +13,33 @@ This is an iterative prompt. Expect to run it multiple times:
 - Pass 1: ask what the feature/bugfix is, draft an initial user story, produce a best-effort `REQUIREMENTS.md`, and ask the minimum questions needed to remove ambiguity.
 - Pass N: incorporate the user’s answers, resolve open questions, tighten acceptance criteria, and strengthen the validation plan.
 
+Operating model: the owner/PM/BA provides product intent and decisions conversationally; the agent extracts, drafts, records, and validates workflow artifacts. Do not ask the owner to manually fill templates as the normal path.
+
+Approval model: requirements capture ends with one explicit owner confirmation that the brief
+plain-language Intent accurately reflects what they mean. Run `task approval-summary` or
+`epic approval-summary`, show the Intent, completion capability, exclusions and proof journey,
+and ask whether that meaning is accurate. Do not ask the owner to approve task IDs, AC IDs,
+hashes or a document bundle as a substitute for comprehension. Record approval with
+`task approve-requirements` or `epic approve-requirements` only after that confirmation.
+
+After that approval, the agent normally continues autonomously through Planner, a post-plan
+Clarify pass, `task ready`, and `Ready`. Pause after requirements only when the user requests a
+setup/review-only boundary, a material product decision remains, or the plan is exceptional/high
+risk enough to justify an explicit review.
+
+Minimum intake context to gather before downstream planning:
+
+- Problem or opportunity
+- Desired outcome
+- Affected user, actor, or system
+- Scope boundaries and non-goals
+- Acceptance signal for done
+- Constraints, priority/risk, and examples or failure modes
+
 Context sources (reference, don’t duplicate):
 
 - Technical constraints/instructions: [../copilot-instructions.md](../copilot-instructions.md)
+- Repo-specific workflow guidance: [../../.project-workflow/guidance.md](../../.project-workflow/guidance.md)
 - Project outcomes (north stars): [../../.project-workflow/CONSTITUTION.md](../../.project-workflow/CONSTITUTION.md)
 - User story tracker: [../../.project-workflow/TRACKER.md](../../.project-workflow/TRACKER.md)
 - E2E exception rules (only if editing `front-end/apps/e2e/**`): [../instructions/e2e.instructions.md](../instructions/e2e.instructions.md)
@@ -46,8 +71,12 @@ Process:
     - And only the minimal freeform context needed to draft a user story (where in the product, who is affected, and what success looks like).
   - IMPORTANT: In Discovery, do NOT ask A/B/C-style questions yet. You do not have a user story to anchor them to.
   - If Discovery information is missing, STOP after asking the Discovery questions. Do not draft a user story, do not write/update files, and do not ask additional questions.
+  - If the request is explicitly discovery work, record it as `Type: Discovery` with a question, decision enabled, boundary, output, and validation signal.
 
 - Step 1: Draft the user story (only after Discovery is answered).
+  - First write a one- or two-sentence `## Intent` in the owner's language and a stable
+    `## Intent Spine` covering completion capability, material capabilities, success journey,
+    successful-but-wrong result, exclusions, assumptions and authority source.
   - Based on the user’s Discovery answer (or the provided inputs), write a first-draft user story (may be imperfect) and put it in BOTH:
     - `/.project-workflow/tasks/${input:taskId}/IMPLEMENTATION.md` under `## User Story`
     - `/.project-workflow/tasks/${input:taskId}/REQUIREMENTS.md` under `## User Story`
@@ -67,12 +96,31 @@ Process:
 - Update `REQUIREMENTS.md` to be internally consistent.
 - If any critical requirement is ambiguous, untestable, or missing, write it as an open question and then ask the user the minimum set of questions to resolve it.
 - Stop after asking questions. Do not proceed to planning/implementation until open questions are resolved or explicitly accepted as risks and recorded.
+- Once open questions are resolved, run the relevant `approval-summary`, present it verbatim and
+  ask: "Does this Intent accurately capture what you want and what success means?" After the owner
+  confirms that meaning, record the approval envelope with the workflow CLI. IDs and hashes remain
+  provenance, not the meaning approved. Downstream agents should not ask for repeated approval
+  unless the intent, scope, proof obligations or source-of-truth interpretation materially change.
 
 ## Overview
 
 - Goal (in user terms):
 - Primary user(s):
 - Desired outcome:
+
+## Intent
+
+State the owner's desired outcome in one or two plain-language sentences.
+
+## Intent Spine
+
+- OC1 — Completion capability:
+- OC2 — Material capabilities:
+- OC3 — Success journey:
+- OC4 — Successful-but-wrong result:
+- OC5 — Exclusions:
+- OC6 — Assumptions:
+- OC7 — Authority source:
 
 ## User Story
 
@@ -111,7 +159,18 @@ List requirements as outcomes/expectations, not implementation details.
 
 ## Acceptance Criteria
 
--
+- AC1:
+- AC2:
+
+## Repository Scope
+
+When `.project-workflow/config.json` declares `workspace`, record:
+
+- Primary repository: `<registered repository ID>`
+- Repositories touched: `<comma-separated registered repository IDs>`
+
+The parent authority owns the only live workflow state. Registration does not authorize Git or
+delivery mutations in another repository.
 
 ## Assumptions
 
@@ -142,6 +201,8 @@ Capture resolved questions and selected options from the Clarify step.
 
 - How the user will verify “done”:
 - Rollout notes (if any):
+- Required proof recipes, if triggered by requirements/claims:
+- Invalid substitutes for those proof recipes:
 
 ## Review Questions (Answer Needed)
 
@@ -158,7 +219,9 @@ Rules:
 
 Also:
 
-- Ensure `/.project-workflow/TRACKER.md` has a row for `${input:taskId}` and set story `Status` to `Analysing` while requirements are being captured.
+- Ensure `/.project-workflow/TRACKER.md` has a row for `${input:taskId}`. Keep a new task at `To Do`
+  while requirements are being drafted. Move to `Analysing` only after the owner approval envelope
+  is recorded and planning begins.
 - Ensure `/.project-workflow/tasks/${input:taskId}/IMPLEMENTATION.md` exists and begins with a `## User Story` section at the very top.
   - If you need to create the file, keep it minimal (user story only, plus placeholders if required by repo convention).
   - Do not generate or populate any task list here.
@@ -167,9 +230,13 @@ Also:
 Guardrails:
 
 - The requirements must be internally consistent (no contradictions across sections).
-- Every item in `## Acceptance Criteria` must be verifiable in `## Validation Plan (User-Facing)`.
-- In `## Validation Plan (User-Facing)`, include an explicit AC-by-AC mapping (`AC -> verification step`).
+- Every item in `## Acceptance Criteria` must have a stable ID (`AC1`, `AC2`, etc.) and be verifiable in `## Validation Plan (User-Facing)`.
+- In `## Validation Plan (User-Facing)`, include an explicit AC-by-AC mapping (`AC1 -> verification step`, `AC2 -> verification step`, etc.).
+- If the owner says the work must match a design, reference, screenshot, visual state, deployed/runtime behavior, external contract, or multi-context behavior, explicitly name the required proof recipe and the invalid substitutes. Examples: visual fidelity requires rendered comparison against the delivered user-facing artifact; runtime target/source proof requires the exact target, source/artifact under test, observation method, and positive proof that target used that source.
+- Preserve existing AC IDs when revising requirements. Do not renumber existing ACs unless the user explicitly approves the requirements change.
 - If this story includes delegated execution (`project.delegate`), ensure requirements, acceptance criteria, and decisions explicitly cover: execution modes, default `sequential` behavior, dependency-map input + strict validation (unknown IDs, self-dependencies, cycles), default parallel worker limit (`4`), fail-fast semantics (stop new launches, allow in-flight completion), and final status reporting (including halted items).
 - If delegated-execution decisions evolve, update both `## Acceptance Criteria` and `## Decisions Log` in the same pass so downstream planning/implementation stay aligned.
 - Do not create or update implementation task lists in `IMPLEMENTATION.md` from this prompt; the `project.planner` prompt owns tasks.
-- Do not move the story status past `Analysing` from this prompt.
+- Do not move the story to `Analysing` before owner approval. After approval, hand off directly to
+  Planner unless the user requested a pause.
+- After requirements and implementation planning are complete, the agent must use `./.project-workflow/cli/workflow task ready --id ${input:taskId}` before implementation-oriented status transitions. If it reports missing or stale owner approval, collect the specific owner confirmation once and record it with `task approve-requirements`; do not continue into implementation from an unapproved envelope.

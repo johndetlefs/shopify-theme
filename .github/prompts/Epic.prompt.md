@@ -1,18 +1,23 @@
 ---
 name: project.epic
-description: Manage epic lifecycle (init, decompose, approve, scaffold child).
-argument-hint: action=setup|init|decompose|approve|scaffold-child title="..." epicId=EPIC-001 id=TASK-001
+description: Manage epic lifecycle (init, approval, contract, decomposition, amendment, adoption, scaffold child, status, audit, closeout).
+argument-hint: action=setup|init|approve-requirements|lifecycle|decompose|amend|approve|scaffold-child|status|audit|closeout title="..." epicId=EPIC-001 id=TASK-001
 agent: agent
 ---
+<!-- project-workflow:generated -->
 
 Use this prompt to run epic workflow operations through the local workflow CLI.
 
+Read `/.project-workflow/guidance.md` if present before changing workflow state.
+
 Inputs:
 
-- Action: `${input:action:setup|init|decompose|approve|scaffold-child}`
+- Action: `${input:action:setup|init|ready|approve-requirements|lifecycle|decompose|amend|adopt|approve|scaffold-child|ready-child|status|audit|closeout}`
 - Epic title (required for `init`): `${input:title:}`
 - Epic ID (required for all non-init actions): `${input:epicId:EPIC-001}`
 - Row ID (required for `approve` and `scaffold-child`): `${input:id:TASK-014}`
+- Status target (required for `status`): `${input:status:Testing|Review|Complete}`
+ - Epic lifecycle target (required for `lifecycle`): `${input:lifecycleStatus:Analysing|Ready|In Progress|Closeout|Complete}`
 - Decompose limit (optional, default 5): `${input:limit:5}`
 - Decompose type (optional, default Task): `${input:type:Task}`
 - Create branch for scaffold-child (optional): `${input:createBranch:no}`
@@ -23,9 +28,12 @@ Defaults and inference:
 
 - If action is omitted, infer from provided inputs:
   - `title` only -> `setup`
-  - `epicId` + no `id` -> `decompose`
+  - `epicId` + no `id` -> `ready` then `decompose`
   - `epicId` + `id` + intent to approve -> `approve`
   - `epicId` + `id` + intent to scaffold -> `scaffold-child`
+  - `epicId` + `id` + lifecycle intent -> `status`
+  - `epicId` + intent to audit -> `audit`
+  - `epicId` + intent to close -> `closeout`
 - If inference is unclear, ask one clarifying question and stop.
 
 Required preflight for `init`:
@@ -40,15 +48,21 @@ Guided setup mode (`action=setup`):
 - Drive the complete lifecycle so users do not miss gates:
   1. Initialize epic.
   2. Verify epic requirements are ready for decomposition.
-  3. Decompose into Proposed rows.
-  4. Ask user which rows to approve.
-  5. Optionally scaffold approved children.
+  3. Run `epic approval-summary`, show its Intent/capability/boundary/proof synopsis and ask
+     whether that meaning accurately captures what the owner wants.
+  4. Record that meaning-first approval with `epic approve-requirements`; IDs and hashes remain
+     provenance rather than the substance of the approval.
+  5. Confirm `EPIC-CONTRACT.md` has concrete sources of truth, invalid substitutes, invariants, artifact targets, and proof owners.
+  6. Decompose into Proposed rows and `DECOMPOSITION.md`.
+  7. Approve/scaffold matching rows inside the approved decomposition plan as needed; do not ask for repeated owner approval unless the row is outside the plan or changes material scope.
 - Ask at most one clarifying question at a time.
 - After each completed step, explicitly state the next required step and offer to run it.
 
 Requirements readiness gate (before `decompose`):
 
+- Run `./.project-workflow/cli/workflow epic ready --epic-id <EPIC_ID>` before `decompose`.
 - Do not run `decompose` until epic `REQUIREMENTS.md` contains concrete, non-placeholder bullets under `## Requirements` and/or `## Acceptance Criteria`.
+- Acceptance criteria should use stable IDs (`AC1`, `AC2`, etc.). Preserve existing IDs; do not renumber them unless the user explicitly approves the requirements change.
 - If requirements are missing/skeletal, lead the user through filling them:
   - Ask focused questions to capture intended outcomes and verifiable criteria.
   - Update epic `REQUIREMENTS.md` with the provided answers.
@@ -67,6 +81,7 @@ Requirements interview flow (when requirements are missing/skeletal):
   4. Acceptance bullets: "List 3-7 verifiable acceptance criteria as bullets."
   5. Open questions: "What unknowns still need decisions?"
 - Normalize answers into concise bullet points and replace placeholder lines like `- ____` in matching sections.
+- Prefix acceptance criteria with stable IDs when writing them, for example `- AC1: <verifiable outcome>`.
 - For pasted blocks, extract and map content into sections:
   - Product outcome/business goal -> `## Goal`
   - Platform/UX behavior statements -> `## Requirements (Outcome-Focused)`
@@ -74,13 +89,20 @@ Requirements interview flow (when requirements are missing/skeletal):
   - Unknowns/dependencies/API notes -> `## Open Questions (Answer Needed)`
 - Keep source fidelity: preserve critical terms, links, and proper nouns from the pasted text.
 - If the pasted block includes desktop/mobile/backend variants, keep those distinctions explicit in the normalized bullets.
-- Read back the drafted `## Requirements` and `## Acceptance Criteria` bullets and ask for confirmation before decomposition.
-- Only proceed to `decompose` after user confirms the drafted requirements content.
+- Draft and read back the one- or two-sentence `## Intent` before the detailed contract.
+- Run `epic approval-summary` and ask whether its meaning accurately captures what the owner wants;
+  do not ask the owner to approve Epic, AC or child IDs.
+- Only proceed after that confirmation, then record it with `epic approve-requirements`.
+- If requirements, acceptance criteria, `EPIC-CONTRACT.md`, or `DECOMPOSITION.md` materially change after approval, re-run the relevant gate and seek owner confirmation only for the changed authority envelope.
 
 Readiness minimums for decomposition:
 
 - `## Requirements` has at least 3 non-placeholder bullet items, or `## Acceptance Criteria` has at least 3 non-placeholder bullet items.
 - At least one acceptance bullet is objectively testable (contains a measurable or observable outcome).
+- `EPIC-CONTRACT.md` has non-placeholder sources of truth, invalid substitutes, invariants, artifact targets, and proof owners before decomposition or child lifecycle movement.
+- After decomposition and child planning, `INTENT-AUDIT.json` maps every OC commitment to parent
+  ACs, child owners, disposition, required outcome proof, source/target locations and user-visible
+  consequence. `epic intent-audit` must report current before child readiness, Review or Complete.
 
 Execution:
 
@@ -93,7 +115,16 @@ Execution:
 
 `./.project-workflow/cli/workflow epic init --title "<TITLE>"`
 
+`./.project-workflow/cli/workflow epic approval-summary --epic-id <EPIC_ID>`
+
+`./.project-workflow/cli/workflow epic approve-requirements --epic-id <EPIC_ID> --approved-by "<OWNER>" --source "<OWNER CONFIRMATION SOURCE>"`
+
 `./.project-workflow/cli/workflow epic decompose --epic-id <EPIC_ID> --limit <LIMIT> --type <TYPE>`
+
+When `.project-workflow/config.json` defines multiple task namespaces,
+decomposition classifies each proposed child row with `prefix_guidance` by
+default. Use `--prefix <PREFIX>` only when intentionally forcing every proposed
+child row into one configured namespace.
 
 `./.project-workflow/cli/workflow epic approve --epic-id <EPIC_ID> --id <ROW_ID>` (one or more user-selected rows)
 
@@ -107,6 +138,34 @@ Execution:
 
 `./.project-workflow/cli/workflow epic decompose --epic-id <EPIC_ID> --limit <LIMIT> --type <TYPE>`
 
+- `approve-requirements`:
+
+`./.project-workflow/cli/workflow epic approve-requirements --epic-id <EPIC_ID> --approved-by "<OWNER>" --source "<OWNER CONFIRMATION SOURCE>"`
+
+- `approval-summary`:
+
+`./.project-workflow/cli/workflow epic approval-summary --epic-id <EPIC_ID>`
+
+- `intent-audit` (read-only sourced coverage, classifications and freshness):
+
+`./.project-workflow/cli/workflow epic intent-audit --epic-id <EPIC_ID> [--format json]`
+
+- `amend`:
+
+`./.project-workflow/cli/workflow epic amend --epic-id <EPIC_ID> --id <ROW_ID> --title "<TITLE>" --parent-acs "<AC1, AC2>" --reason "<OWNER-APPROVED REASON>"`
+
+- `adopt`:
+
+`./.project-workflow/cli/workflow epic adopt --epic-id <EPIC_ID> --approved-by "<OWNER>" --source "<ADOPTION SOURCE>"`
+
+- `ready`:
+
+`./.project-workflow/cli/workflow epic ready --epic-id <EPIC_ID>`
+
+- `lifecycle`:
+
+`./.project-workflow/cli/workflow epic lifecycle --epic-id <EPIC_ID> --to <LIFECYCLE_STATUS>`
+
 - `approve`:
 
 `./.project-workflow/cli/workflow epic approve --epic-id <EPIC_ID> --id <ROW_ID>`
@@ -119,17 +178,59 @@ Execution:
 
 `./.project-workflow/cli/workflow epic scaffold-child --epic-id <EPIC_ID> --id <ROW_ID> --create-branch --epic-branch <EPIC_BRANCH> --branch-prefix <PREFIX>`
 
+- `ready-child`:
+
+`./.project-workflow/cli/workflow epic ready-child --epic-id <EPIC_ID> --id <ROW_ID>`
+
+- `status`:
+
+`./.project-workflow/cli/workflow epic status --epic-id <EPIC_ID> --id <ROW_ID> --to <STATUS>`
+
+- `audit`:
+
+`./.project-workflow/cli/workflow epic audit --epic-id <EPIC_ID>`
+
+- `closeout`:
+
+`./.project-workflow/cli/workflow epic closeout --epic-id <EPIC_ID> [--complete]`
+
 Constraints to enforce in responses:
 
+- Requirements/AC approval is an authority envelope, not a recurring ceremony. Ask the owner to confirm requirements and ACs once before decomposition or implementation; after that, use gates to detect drift and ask again only for material changes, amendments, deviations, artifact identity changes, proof-obligation changes, or deferrals.
+- New/adopted epics require non-placeholder `EPIC-CONTRACT.md` before decomposition, child approval/scaffolding, or `In Progress`.
+- `DECOMPOSITION.md` is the child-row authority source. Matching rows inside it may be approved/scaffolded by the agent without repeated owner approval; rows outside it require `epic amend`.
+- For pre-existing epics, use `epic adopt`; inferred legacy evidence is not trusted for closeout until refreshed.
+- Proof recipes triggered by requirements, ACs, contracts, child charters, or material claims require child-local `EVIDENCE.json`. QA prose, code review, tests, build output, surrogate artifacts, and wrong target/source pairs are invalid substitutes where the recipe says so.
+- Visual/reference-fidelity work requires calibration before implementation and delivered-artifact comparison before Review/Complete.
 - Decomposition is proposal-first: it writes Proposed rows and does not scaffold child folders.
+- `ACCEPTANCE-MAP.md` is the in-progress parent AC coverage view. It is created on `epic init` and refreshed by epic lifecycle commands from requirements, tracker rows, deferrals, and child evidence.
+- Proposed child rows should preserve source AC IDs in the epic tracker `Parent ACs` field when they come from numbered acceptance criteria. Legacy trackers may still carry coverage in `Notes` as `Covers AC1, AC3`.
+- In workspace mode, every child records a registered primary repository and all registered
+  repositories touched. Review and Complete require one matching repository-evidence row per
+  touched repository; child repositories do not own competing workflow trackers.
+- Proposed child rows should preserve configured task prefixes such as `UI`, `MCP`, `DEV`, or `WF`, and their `Notes` should include prefix classification rationale.
+- Scaffolded epic child tasks must carry parent AC coverage and parent AC evidence sections forward into their docs. Their `IMPLEMENTATION.md` planning table must map each row to child AC IDs while keeping the parent AC mapping visible.
+- The global tracker summarizes epic rows; the epic tracker owns child rows. Proposed child rows must stay in the epic tracker and must not be added to the global tracker.
+- `epic audit` writes `ACCEPTANCE-AUDIT.md` with parent AC coverage, child evidence, deferrals, and verdicts. The audit is the closeout evidence artifact; `ACCEPTANCE-MAP.md` is the working coverage map.
+- `epic closeout` must block if any parent AC is unmapped, lacks evidence, lacks a QA pass verdict, lacks an approved deferral with follow-up, or if `RETRO.md` is missing/incomplete.
+- Before closeout, ensure `RETRO.md` records lessons, follow-up tasks, deferrals, and missed in-scope work. Use explicit `None.` entries when a section has nothing to report.
+- `epic status --to Complete` must block unless the child row is in `Review` and its docs contain QA/code-review evidence plus parent AC evidence for its assigned parent ACs.
+- `epic ready-child` must pass before implementation/testing for an epic child; if it fails, remediate missing child requirements, planning, parent AC coverage, or owner decisions before coding.
+- `epic lifecycle` updates the global epic row through `Analysing`, `Ready`, `In Progress`, and `Closeout`. `Ready`, `In Progress`, and `Closeout` are gated; `Complete` remains owned by `epic closeout --complete`.
 - Approval gate: only Approved rows may be scaffolded.
-- Child task IDs remain globally unique and are managed by workflow behavior.
+- Child task IDs remain globally unique within their configured prefix namespaces and are managed by workflow behavior.
 - If branch creation is requested for `scaffold-child`, the epic branch must already exist; no fallback branch is allowed.
 - In setup mode, do not skip required gates even if the user asks for later steps first; explain what is missing, satisfy the gate, then continue.
+- Delegate may execute existing approved Epic child rows, but it may not decompose, amend, approve,
+  scaffold unplanned children, or write the Epic tracker from workers. Persistent child tasks require
+  explicit owner authority plus runtime-observed verified creation, isolated-worktree, monitoring,
+  capacity, and required reconciliation capabilities; otherwise coordinate safely and sequentially or
+  block.
 
 Output to user:
 
 - Report the exact command run (for setup mode, report each command in order).
 - Summarize resulting epic/task ID, files/folders created, tracker updates, and branch result (if any).
+- Run `./.project-workflow/cli/workflow doctor` after epic tracker or child scaffold changes and report any warnings or errors.
 - If command fails, return the error and the next remediation step from the error message.
 - In setup mode, also include a short checklist of completed steps and the single next recommended action.
